@@ -9,7 +9,7 @@
 
 
 ;; TODO: Use if fluent-mode is present
-(require 'fluent)
+;; (require 'fluent)
 
 (defgroup cmake-mode nil
   "cmake buildsystem mode"
@@ -28,7 +28,7 @@
             (define-key map (kbd "<f12>") 'cmake-mode-add-selected-executable)
             (define-key map (kbd "C-<f12>") 'cmake-mode-add-run-scenariotest)
             map)
-  :group 'cmake-mode
+  :group 'cmake-mode)
 
 ;;;###autoload
 (add-hook 'c++-mode-hook 'cmake-mode)
@@ -51,13 +51,13 @@
   :type 'string
   :group cmake-mode)
  
-(defvar cmake-mode-install-folder-name
+(defcustom cmake-mode-install-folder-name
   "install"
   "Folder name to install to."
   :type 'string
   :group cmake-mode)
  
-(defvar cmake-mode-generator
+(defcustom cmake-mode-generator
   "Ninja"
   "Generator to use with the cmake-mode"
   :type 'string
