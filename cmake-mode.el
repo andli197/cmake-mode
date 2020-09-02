@@ -181,7 +181,7 @@
  
 (defun cmake-mode--cmake-build-types-get-build-type (item)
   "Return cmake build type from ITEM."
-  (caddr item))
+  (car (cddr item)))
  
 (defvar cmake-mode-change-os-and-build-type-hook '()
   "Hook for calling methods when os and buildtype has been changed.")
