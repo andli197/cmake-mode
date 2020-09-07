@@ -1,4 +1,4 @@
-;;; cmake-mode --- Toolkit for building projects using cmake
+';;; cmake-mode --- Toolkit for building projects using cmake
 
 ;; Author: Andreas Lindblad
 ;; Keywords: extensions, tools, cmake
@@ -33,18 +33,28 @@
 ;;;###autoload
 (add-hook 'c++-mode-hook 'cmake-mode)
 
+(defvar cmake-mode--cmake-build-types-list
+  '(("Debug" "debug" "DEBUG")
+    ("Release" "release" "RELEASE")
+    ("Relase with debug info" "release_with_debug_info" "RELWITHDEBINFO")
+    ("Minimal size release" "minimal_size_release" "MINSIZEREL")))
 (defvar cmake-mode-operating_system "")
-(defvar cmake-mode-build-type '())
+(defvar cmake-mode-build-type (car cmake-mode--cmake-build-types-list))
 (defvar cmake-mode-executable-command "")
 (defvar cmake-mode-executable-arguments "")
 (defvar cmake-mode-selected-test-to-run "")
 (defvar cmake-mode--extra-arguments-history '("{command}"))
-(defvar cmake-mode-available-operating-system '("centos6" "centos7"))
 (defvar cmake-mode--execute-command-history '())
 (defvar cmake-mode--execute-argument-history '())
 (defvar cmake-mode-execute-prefix-hook '()
   "Hook to generate commands to be added before the executable")
  
+(defcustom cmake-mode-available-operating-system
+  '("linux" "centos6" "centos7")
+  "Types of operating systems to build for."
+  :type 'list
+  :group cmake-mode)
+
 (defcustom cmake-mode-build-folder-name
   "build"
   "Folder name to build in."
@@ -58,7 +68,7 @@
   :group cmake-mode)
  
 (defcustom cmake-mode-generator
-  "Ninja"
+  "Unix Makefiles"
   "Generator to use with the cmake-mode"
   :type 'string
   :group cmake-mode)
@@ -154,7 +164,7 @@
 	 (read-string "additional: "
 		      (car cmake-mode--extra-arguments-history)
 		      'cmake-mode--extra-arguments-history)))
-    (fluent-execution-add
+    (fluent-add
      (replace-regexp-in-string
       (regexp-quote "{command}")
       command
@@ -163,13 +173,8 @@
 (defun cmake-mode-add-to-fluent (command)
   "Add COMMAND to fluent execution."
   (interactive)
-  (fluent-execution-add command))
+  (fluent-add command))
  
-(defvar cmake-mode--cmake-build-types-list
-  '(("Debug" "debug" "DEBUG")
-    ("Release" "release" "RELEASE")
-    ("Relase with debug info" "release_with_debug_info" "RELWITHDEBINFO")
-    ("Minimal size release" "minimal_size_release" "MINSIZEREL")))
  
 (defun cmake-mode--cmake-build-types-get-human-readable-name (item)
   "Return human readable name from ITEM."
@@ -236,12 +241,12 @@
    " -DCMAKE_INSTALL_PREFIX="
    (cmake-mode-get-install-path)
    " -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-   " -G\"" cmake-mode-generator "\""
+   " -G\"{cmake-mode-generator}\""
    " " (cmake-mode-get-code-path)
    ))
  
 ;;; Build selection file handling section
-(defvar cmake-mode-build-file-name ".user-build.el")
+(defvar cmake-mode-build-file-name ".cmake-mode.el")
 (defun cmake-mode-generate-build-file-content ()
   "Content to write to build file."
   (concat
@@ -261,7 +266,9 @@
 		 cmake-mode-build-file-name)))
     (when (file-exists-p cmake-mode-build-file)
       (load cmake-mode-build-file)
-      (message (concat cmake-mode-build-file " read")))))
+      (message (concat cmake-mode-build-file " read")))
+    ;; TODO: Load the os and build type change hooks?
+    ))
  
 (defun cmake-mode-write-build-file ()
   "Write the settings to build-file."
