@@ -46,7 +46,7 @@
 (defvar cmake-mode--extra-arguments-history '("{command}"))
 (defvar cmake-mode--execute-command-history '())
 (defvar cmake-mode--execute-argument-history '())
-(defvar cmake-mode-execute-prefix-hook '()
+(defvar cmake-mode-execute-prefix-commands '()
   "Hook to generate commands to be added before the executable")
  
 (defcustom cmake-mode-available-operating-system
@@ -152,10 +152,13 @@
 		    (or (car cmake-mode--execute-argument-history) "")
 		    'cmake-mode--execute-argument-history)))
     (cmake-mode-add-to-fluent-with-extra
-     (concat (run-hooks 'cmake-mode-execute-prefix-hook)
-             "{(cmake-mode-generate-cd-install-path)} && "
-             command " " arguments))))
-
+     (mapconcat 'identity
+                (seq-concatenate 'list
+                                 (seq-map (lambda (command) (funcall command))
+                                          (reverse cmake-mode-execute-prefix-commands))
+                                 (list "{(cmake-mode-generate-cd-install-path)}"
+                                       (concat command " " arguments)))
+                " && "))))
  
 (defun cmake-mode-add-to-fluent-with-extra (command)
   "Add COMMAND to fluent execution and give the user possibility to add extra to the command."
