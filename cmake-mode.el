@@ -7,10 +7,6 @@
 ;; Package-Requires:
 ;; Version: 0.1.0
 
-
-;; TODO: Use if fluent-mode is present
-;; (require 'fluent)
-
 (defgroup cmake-mode nil
   "cmake buildsystem mode"
   :group 'tools
@@ -21,12 +17,11 @@
   "Small cmake project mode."
   :lighter " cmake"
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "<f9>") 'cmake-mode-add-run-cmake)
-            (define-key map (kbd "<f10>") 'cmake-mode-add-run-custom-build)
-            (define-key map (kbd "<f11>") 'cmake-mode-add-selected-test)
-            (define-key map (kbd "C-<f11>") 'cmake-mode-add-run-tests)
-            (define-key map (kbd "<f12>") 'cmake-mode-add-selected-executable)
-            (define-key map (kbd "C-<f12>") 'cmake-mode-add-run-scenariotest)
+            (define-key map (kbd "C-c C-c c") 'cmake-mode-add-run-cmake)
+            (define-key map (kbd "C-c C-c b") 'cmake-mode-add-run-custom-build)
+            (define-key map (kbd "C-c C-c t") 'cmake-mode-add-selected-test)
+            (define-key map (kbd "C-c C-c T") 'cmake-mode-add-run-tests)
+            (define-key map (kbd "C-c C-c x") 'cmake-mode-add-selected-executable)
             map)
   :group 'cmake-mode)
 
@@ -37,11 +32,11 @@
   '(("Debug" "debug" "DEBUG")
     ("Release" "release" "RELEASE")
     ("Relase with debug info" "release_with_debug_info" "RELWITHDEBINFO")
-    ("Minimal size release" "minimal_size_release" "MINSIZEREL")))
-(defvar cmake-mode-operating_system "")
+    ("Minimal size release" "minimal_size_release" "MINSIZEREL"))
+  "Types of builds supported by cmake.")
+
 (defvar cmake-mode-build-type (car cmake-mode--cmake-build-types-list))
-(defvar cmake-mode-executable-command "")
-(defvar cmake-mode-executable-arguments "")
+(defvar cmake-mode-operating_system "")
 (defvar cmake-mode-selected-test-to-run "")
 (defvar cmake-mode--extra-arguments-history '("{command}"))
 (defvar cmake-mode--execute-command-history '())
@@ -53,26 +48,32 @@
   '("linux" "centos6" "centos7")
   "Types of operating systems to build for."
   :type 'list
-  :group cmake-mode)
+  :group 'cmake-mode)
 
 (defcustom cmake-mode-build-folder-name
   "build"
   "Folder name to build in."
   :type 'string
-  :group cmake-mode)
+  :group 'cmake-mode)
  
 (defcustom cmake-mode-install-folder-name
   "install"
   "Folder name to install to."
   :type 'string
-  :group cmake-mode)
+  :group 'cmake-mode)
  
 (defcustom cmake-mode-generator
   "Unix Makefiles"
   "Generator to use with the cmake-mode"
   :type 'string
-  :group cmake-mode)
+  :group 'cmake-mode)
  
+(defcustom cmake-mode-build-settings-file-name
+  ".cmake-mode.el"
+  "File to read and write the current selection to."
+  :type 'string
+  :group 'cmake-mode)
+
 (defun user/completing-read-item (prompt choises display-fn &optional predicate require-match initial-input history def inherit-input-method)
   "Call `ido-completing-read' with PROMPT and a transofmration of CHOISES with DISPLAY-FN along with PROMPT, PREDICATE, REQUIRE-MATCH, INITIAL-INPUT, HISTORY, DEF and INHERIT-INPUT-METHOD.  Based on selection the method use the DISPLAY-FN to deduce the item from CHOISES and return the whole item.  The DISPLAY-FN must be forcing an unique string from the CHOISES list."
   (interactive)
@@ -84,26 +85,12 @@
     (seq-find
      (lambda (item) (string= (funcall display-fn item) display-selection))
      choises)))
-
-(defun cmake-mode-add-cd-build-dir ()
-  "Add changing directory to build dir."
-  (interactive)
-  (cmake-mode-read-build-file)
-  (cmake-mode-add-to-fluent
-   (cmake-mode-generate-cd-build-path)))
- 
-(defun cmake-mode-add-cd-install-dir ()
-  "Add changing directory to build dir."
-  (interactive)
-  (cmake-mode-read-build-file)
-  (cmake-mode-add-to-fluent
-   (cmake-mode-generate-cd-install-path)))
  
 (defun cmake-mode-add-run-cmake ()
   "Add cmake command to execution model."
   (interactive)
   (cmake-mode-read-build-file)
-  (cmake-mode-add-to-fluent
+  (cmake-mode-compile
    (concat "{(cmake-mode-generate-cd-build-path)} && "
 	   (cmake-mode-generate-cmake-command))))
  
@@ -112,7 +99,7 @@
   (interactive)
   (cmake-mode-read-build-file)
   (let ((target (ido-completing-read "target: " (cmake-mode--target-read-all))))
-    (cmake-mode-add-to-fluent
+    (cmake-mode-compile
      (concat "{(cmake-mode-generate-cd-build-path)} && "
 	     (cmake-mode-generate-build-target target)))))
 
@@ -120,17 +107,9 @@
   "Add unittests command to execution model."
   (interactive)
   (cmake-mode-read-build-file)
-  (cmake-mode-add-to-fluent
+  (cmake-mode-compile
    (concat "{(cmake-mode-generate-cd-build-path)} && "
 	   cmake-mode--generate-test-command)))
-
-(defun cmake-mode-add-run-scenariotest ()
-  "Add unittests command to execution model."
-  (interactive)
-  (cmake-mode-read-build-file)
-  (cmake-mode-add-to-fluent
-   (concat "{(cmake-mode-generate-cd-install-path)} && "
-	   (cmake-mode-generate-scenariotest-command))))
 
 (defun cmake-mode-add-selected-test ()
   "Select unittest from target and add tp execution model."
@@ -138,30 +117,29 @@
   (cmake-mode-write-build-file)
   (cmake-mode-add-to-fluent-with-extra (cmake-mode-select-test)))
  
+(defun cmake-mode-read-with-history (prompt history)
+  (read-string prompt (or (car (eval history)) "") history))
 
 (defun cmake-mode-add-selected-executable ()
   "Propmpt user for command and arguments for executable to execute."
   (interactive)
   (cmake-mode-read-build-file)
-  (let ((command (read-string
-		  "command: "
-		  (or (car cmake-mode--execute-command-history) "")
-		  'cmake-mode--execute-command-history))
-        (arguments (read-string
-		    "arguments: "
-		    (or (car cmake-mode--execute-argument-history) "")
-		    'cmake-mode--execute-argument-history)))
+  (let* ((command (cmake-mode-read-with-history
+                   "command: "
+                   'cmake-mode--execute-command-history))
+        (arguments (cmake-mode-read-with-history
+                    "arguments: "
+                    'cmake-mode--execute-argument-history))
+        (commands-prefix (seq-map (lambda (c) (funcall c))
+                                  (reverse cmake-mode-execute-prefix-commands)))
+        (execution-command (list "{(cmake-mode-generate-cd-install-path)}"
+                                 (concat command " " arguments)))
+        (commands (seq-concatenate 'list commands-prefix execution-command)))
     (cmake-mode-add-to-fluent-with-extra
-     (mapconcat 'identity
-                (seq-concatenate 'list
-                                 (seq-map (lambda (command) (funcall command))
-                                          (reverse cmake-mode-execute-prefix-commands))
-                                 (list "{(cmake-mode-generate-cd-install-path)}"
-                                       (concat command " " arguments)))
-                " && "))))
+     (mapconcat 'identity commands " && "))))
  
 (defun cmake-mode-add-to-fluent-with-extra (command)
-  "Add COMMAND to fluent execution and give the user possibility to add extra to the command."
+  "Add COMMAND to execution and give the user possibility to add extra to the command."
   (interactive)
   (let ((new-command
 	 (read-string "additional: "
@@ -173,26 +151,24 @@
       command
       new-command))))
  
-(defun cmake-mode-add-to-fluent (command)
+(defun cmake-mode-compile (command)
   "Add COMMAND to fluent execution."
   (interactive)
-  (fluent-add command))
- 
- 
+  (if (bound-and-true-p fluent-mode)
+      (fluent-add command)
+    (compile (mapconcat 'identity command " && "))))
+
 (defun cmake-mode--cmake-build-types-get-human-readable-name (item)
   "Return human readable name from ITEM."
   (car item))
  
-(defun cmake-mode--cmake-build-types-get-folder-name (item)
+(defun cmake-mode--get-foldername-from-selected-build-type ()
   "Return folder name from ITEM."
-  (cadr item))
+  (cadr cmake-mode-build-type))
  
-(defun cmake-mode--cmake-build-types-get-build-type (item)
+(defun cmake-mode--get-selected-build-type ()
   "Return cmake build type from ITEM."
-  (car (cddr item)))
- 
-(defvar cmake-mode-change-os-and-build-type-hook '()
-  "Hook for calling methods when os and buildtype has been changed.")
+  (car (cddr cmake-mode-build-type)))
  
 (defun cmake-mode-select-build-and-os ()
   "Read current settings and prompt the user for which os and build type to use then write back the selections."
@@ -205,21 +181,19 @@
 	 "Select build type: "
 	 cmake-mode--cmake-build-types-list
 	 'cmake-mode--cmake-build-types-get-human-readable-name))
-  (run-hooks 'cmake-mode-change-os-and-build-type-hook)
   (cmake-mode-write-build-file))
  
 (defun cmake-mode-get-sub-path ()
   "Return the subpath specified by selected operating-system and build-type."
   (file-name-as-directory
    (concat (file-name-as-directory cmake-mode-operating_system)
-           (cmake-mode--cmake-build-types-get-folder-name
-	    cmake-mode-build-type))))
+           (cmake-mode--get-foldername-from-selected-build-type))))
  
 (defun cmake-mode-get-sibling-folder-name (base-path directory)
   "Return a sibling directory to BASE-PATH named DIRECTORY."
   (file-name-as-directory
    (concat (file-name-directory (directory-file-name base-path)) directory)))
- 
+
 (defun cmake-mode-get-build-path ()
   "Return the path where to execute buid."
   (let ((build-path (concat (cmake-mode-get-build-root)
@@ -240,7 +214,7 @@
   (concat
    "cmake"
    " -DCMAKE_BUILD_TYPE="
-   (cmake-mode--cmake-build-types-get-build-type cmake-mode-build-type)
+   (cmake-mode--get-selected-build-type)
    " -DCMAKE_INSTALL_PREFIX="
    (cmake-mode-get-install-path)
    " -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
@@ -248,8 +222,7 @@
    " " (cmake-mode-get-code-path)
    ))
  
-;;; Build selection file handling section
-(defvar cmake-mode-build-file-name ".cmake-mode.el")
+
 (defun cmake-mode-generate-build-file-content ()
   "Content to write to build file."
   (concat
@@ -266,18 +239,17 @@
   (interactive)
   (let ((cmake-mode-build-file
 	 (concat (cmake-mode-get-code-path)
-		 cmake-mode-build-file-name)))
+		 cmake-mode-build-settings-file-name)))
     (when (file-exists-p cmake-mode-build-file)
       (load cmake-mode-build-file)
-      (message (concat cmake-mode-build-file " read")))
-    ;; TODO: Load the os and build type change hooks?
-    ))
+      (message (concat cmake-mode-build-file " read")))))
  
 (defun cmake-mode-write-build-file ()
   "Write the settings to build-file."
   (interactive)
   (let ((cmake-mode-build-file
-	 (concat (cmake-mode-get-code-path) cmake-mode-build-file-name)))
+         (concat (cmake-mode-get-code-path)
+                 cmake-mode-build-settings-file-name)))
     (with-temp-file
 	cmake-mode-build-file
       (insert (cmake-mode-generate-build-file-content)))
@@ -319,15 +291,16 @@
  
 (defun cmake-mode--testcase-read-all ()
   "Read all test defined in the cmake project and return list of pairs as (NAME . COMMAND)."
-  (let*  ((ctest-output
-	   (shell-command-to-string
-	    (concat (executable-find "bash") " && "
-		    (cmake-mode-generate-cd-build-path) " && "
-		    cmake-mode--testcase-list-all-command)))
-          (match-seq
-	   (reverse (re-seq cmake-mode--testcase-extract-regexp ctest-output))))
+  (let*  ((command (list (executable-find "bash")
+                         (cmake-mode-generate-cd-build-path)
+                         cmake-mode--testcase-list-all-command))
+          (ctest-output (shell-command-to-string
+                         (mapconcat 'identity command " && ")))
+          (match-seq (reverse
+                      (re-seq cmake-mode--testcase-extract-regexp
+                              ctest-output))))
     (mapcar 'cmake-mode--testcase-extract-name-and-command match-seq)))
- 
+
 (defun cmake-mode--testcase-extract-name-and-command (match)
   "Parse a MATCH to (NAME . COMMAND) pair."
   (save-match-data
@@ -344,14 +317,15 @@
  
 (defun cmake-mode--target-read-all ()
   "Read all target from cmake file and return all targets listed as phony."
-  (let* ((targets-output
-	  (shell-command-to-string
-	   (concat
-	    (executable-find "bash") " && "
-	    (cmake-mode-generate-cd-build-path) " && "
-	    cmake-mode--target-list-all-command)))
-         (match-seq
-	  (reverse (re-seq cmake-mode--target-extract-regexp targets-output))))
+  (let* ((command (list
+                   (executable-find "bash")
+                   (cmake-mode-generate-cd-build-path)
+                   cmake-mode--target-list-all-command))
+         (targets-output (shell-command-to-string
+                          (mapconcat 'identity command " && ")))
+         (match-seq (reverse
+                     (re-seq cmake-mode--target-extract-regexp
+                             targets-output))))
     (cons "all" (mapcar 'cmake-mode--target-get-name match-seq))))
  
 (defun cmake-mode--target-get-name (match)
