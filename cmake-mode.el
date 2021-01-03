@@ -288,18 +288,31 @@
 (defvar cmake-mode--testcase-list-all-command
   "ctest -N -V"
   "Command for reading all tests.")
- 
+
+(defvar cmake-mode-pre-cmake-commands
+  '()
+  "A set of commands to set up the shell before running cmake commands.")
+
+(defun cmake-mode--build-pre-cmake-commands ()
+  "Concatinate all cmake-mode-pre-cmake-commands with double ampersands and combine into a single string."
+  (mapconcat 'identity
+             (seq-map (lambda (cmd) (cond ((stringp cmd) cmd)
+                                             ((functionp cmd) (funcall cmd))
+                                             (t '())))
+                         cmake-mode-pre-cmake-commands)
+             " && "))
+
 (defun cmake-mode--testcase-read-all ()
   "Read all test defined in the cmake project and return list of pairs as (NAME . COMMAND)."
-  (let*  ((command (list (executable-find "bash")
-                         (cmake-mode-generate-cd-build-path)
-                         cmake-mode--testcase-list-all-command))
+  (let*  ((command (cmake-mode--build-pre-cmake-commands)
+                   (cmake-mode-generate-cd-build-path)
+                   cmake-mode--testcase-list-all-command))
           (ctest-output (shell-command-to-string
                          (mapconcat 'identity command " && ")))
           (match-seq (reverse
                       (re-seq cmake-mode--testcase-extract-regexp
                               ctest-output))))
-    (mapcar 'cmake-mode--testcase-extract-name-and-command match-seq)))
+    (mapcar 'cmake-mode--testcase-extract-name-and-command match-seq))
 
 (defun cmake-mode--testcase-extract-name-and-command (match)
   "Parse a MATCH to (NAME . COMMAND) pair."
@@ -317,10 +330,9 @@
  
 (defun cmake-mode--target-read-all ()
   "Read all target from cmake file and return all targets listed as phony."
-  (let* ((command (list
-                   (executable-find "bash")
-                   (cmake-mode-generate-cd-build-path)
-                   cmake-mode--target-list-all-command))
+  (let* ((command (list (cmake-mode--build-pre-cmake-commands)
+                        (cmake-mode-generate-cd-build-path)
+                        cmake-mode--target-list-all-command))
          (targets-output (shell-command-to-string
                           (mapconcat 'identity command " && ")))
          (match-seq (reverse
