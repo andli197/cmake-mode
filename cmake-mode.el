@@ -282,7 +282,7 @@
       matches)))
   
 (defvar cmake-mode--testcase-extract-regexp
-  "^[0-9]+: Test command: \\([-_.a-zA-Z0-9\\/]+\\).*\n[ ]+Test[ ]+#[0-9]+: \\(.+\\)"
+  "^[0-9]+: Test command: \\([-_.a-zA-Z0-9\\/\\:]+\\).*\n[ ]+Test[ ]+#[0-9]+: \\(.+\\)"
   "Regexp for extracting test names and executables from verbose ctest output.")
  
 (defvar cmake-mode--testcase-list-all-command
