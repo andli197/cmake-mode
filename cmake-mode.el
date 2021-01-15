@@ -318,7 +318,7 @@
   "Parse a MATCH to (NAME . COMMAND) pair."
   (save-match-data
     (string-match cmake-mode--testcase-extract-regexp match)
-    (cons (match-string 2 match) (match-string 1 match))))
+    (cons (match-string 2 match) (replace-regexp-in-string (regexp-quote "\\") "/" (match-string 1 match)))))
  
 (defvar cmake-mode--target-extract-regexp
   "\\(.+\\): .+"
